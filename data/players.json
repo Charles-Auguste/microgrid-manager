@@ -15,5 +15,22 @@
             "folder": "charging_station_1",
             "type": "charging_station"
         }
+    ],
+    "team_0": [
+        {
+            "url": "",
+            "folder": "industrial_consumer_1",
+            "type": "industrial_consumer"
+        },
+        {
+            "url": "",
+            "folder": "solar_farm_1",
+            "type": "solar_farm"
+        },
+        {
+            "url": "",
+            "folder": "charging_station_1",
+            "type": "charging_station"
+        }
     ]
 }

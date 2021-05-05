@@ -4,27 +4,28 @@ import numpy as np
 import random
 import os
 from collections import defaultdict
+import pandas
+import tqdm
+import matplotlib.pyplot as plt
 
 
 class Manager:
     def __init__(self, team_name: str, path_to_player_file, path_to_price_file):
         self.horizon = 48
         self.dt = 0.5
+        self.nbr_iterations = 50
+        self.nb_pdt = int(self.horizon/self.dt)
 
         self.nb_tot_players = 0
         self.nb_players = defaultdict(int)
 
-        self.players = self.initialize_players(team_name, path_to_player_file)
-        self.mean_prices = self.initialize_prices(path_to_price_file)
-        self.real_prices = {"purchase": np.zeros(self.horizon), "sale": np.zeros(self.horizon)}
-        self.data_scenario = self.initialize_data_scenario()
+        self.players = self.create_players(team_name, path_to_player_file)
+        self.scenarios = self.read_all_scenarios()
+        self.external_prices = {"purchase": np.zeros(self.horizon), "sale": np.zeros(self.horizon)}
 
-        self.imbalance = np.zeros((2, self.horizon))
-        self.grid_load = {"demand": np.zeros(self.horizon), "supply": np.zeros(self.horizon)}
+        self.__results = defaultdict(dict)
 
-        self.scenario = {}
-
-    def initialize_players(self, team_name: str, json_file):
+    def create_players(self, team_name: str, json_file):
         """initialize all players"""
 
         with open(json_file) as f:
@@ -46,271 +47,119 @@ class Manager:
 
         return new_players
 
-    def initialize_prices(self, path_to_price_file):
-        """initialize daily prices"""
-        mean_prices = np.loadtxt(path_to_price_file)  # internal trade, external purchase, external sale
-        dico_prices = {"internal": mean_prices[0, :], "external_purchase": mean_prices[1, :],
-                       "external_sale": mean_prices[2, :]}
-
-        return dico_prices
-
-    def initialize_data_scenario(self):
+    def read_all_scenarios(self):
         """initialize daily scenarios"""
 
         this_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.join(this_dir, "data")
-        dico_data_scenario = {}
+        data_dir = os.path.join(this_dir, "scenarios")
+        # les scenarios pour chaque type de player
+        scenario = {}
 
         for player in self.players:
-            if player.__manager__data["type"] == "charging_station":
-                dico_data_scenario[player.__manager__data["name"]] = \
-                    np.genfromtxt(
-                        os.path.join(
-                            data_dir,
-                            player.__manager__data["team"],
-                            player.__manager__data["name"],
-                            "data.csv"),
-                        delimiter=";")  # departure and arrival time of each car
-            else:
-                dico_data_scenario[player.__manager__data["name"]] = \
-                    np.loadtxt(
-                        os.path.join(
-                            data_dir,
-                            player.__manager__data["team"],
-                            player.__manager__data["name"],
-                            "data.csv")
-                    )
+            player_type = player.__manager__data["type"]
+            if player_type == "charging_station":
+                # TODO : a remplacer
+                pass
+                data = pandas.DataFrame()
+            elif player_type == "solar_farm":
+                # TODO : a remplacer
+                pass
+                data = None
+            # TODO : a completer
+            scenario[player_type] = data
+        return scenario
 
-        return dico_data_scenario
+    def initialize_prices(self):
+        """initialize daily prices"""
+        # TODO do we need a more complex price initialization
+        return {"purchase": np.zeros(self.horizon), "sale": np.zeros(self.horizon)}
 
     def draw_random_scenario(self):
         """ Draw a scenario for the day """
-
+        scenario = {}
         for player in self.players:
+            player_type = player.__manager__data["type"]
+            # TODO: remplacer par un scenario aleatoire dans self.scenarios[player_type]
+            scenario[player_type] = None
+        return scenario
 
-            if player.__manager__data["type"] == "charging_station":
-                # p=random.randint(0,len(self.data_scenario[dico["name"]])/2 -1) 
-                p = random.randint(0, 99)
-                planning = np.array([self.data_scenario[player.__manager__data["name"]][:, 2 * p],
-                                     self.data_scenario[player.__manager__data["name"]][:, 2 * p + 1]])
-
-                self.scenario[player.__manager__data["name"]] = planning
-                # print(planning)
-
-            else:
-                self.scenario[player.__manager__data["name"]] = self.data_scenario[player.__manager__data["name"]][
-                    random.randint(0, len(self.data_scenario[player["name"]]) - 1)]
-
-    def energy_balance(self, time):
+    def get_microgrid_load(self):
         """ Compute the energy balance on a slot """
-        demand = 0
-        supply = 0
+        microgrid_load = np.zeros(self.nb_pdt)
+        loads = {}
 
         for player in self.players:
+            load = player.compute_load()
 
-            if player.__manager__data["type"] == "charging_station":
-                departure = [0] * 4  # departure[i]=1 if the car i leaves the station at t
-                arrival = [0] * 4  # arrival[i]=1 if the car i arrives in the station at t
+            microgrid_load += np.max(load, 0)
+            # storing loads for each player for future backup
+            loads[player] = load
 
-                for i in range(4):
-                    if time == self.scenario[player.__manager__data["name"]][0, i]:
-                        departure[i] = 1
-                    if time == self.scenario[player.__manager__data["name"]][1, i]:
-                        arrival[i] = 1
+        return microgrid_load, loads
 
-                data_to_player = {"departures": departure, "arrivals": arrival}
-            else:
-                data_to_player = self.scenario[player.__manager__data["name"]][time]
-
-            load = player.compute_load(time, data_to_player)
-
-            if load >= 0:  # if the player needs energy
-                demand += load
-            else:  # if the player supply energy
-                supply -= load
-
-        self.grid_load["demand"][time] = demand
-        self.grid_load["supply"][time] = supply
-
-        return demand, supply
-
-    def compute_bills(self, time, demand, supply):
+    def compute_bills(self, microgrid_load, loads):
         """ Compute the bill of each players """
-        total_load = demand - supply  # total load of the grid
-        internal_exchange = min(demand, supply)  # what is going to be exchange on the grid
-        external_exchange = abs(total_load)  # the quantity of energy in surplus on the grid
-        internal_price = self.mean_prices["internal"][time]
-        external_selling_price = self.mean_prices["external_sale"][time]
-        external_purchasing_price = self.mean_prices["external_purchase"][time]
+        microgrid_bill = 0
+        player_bills = np.zeros(len(self.players))
+        # TODO complete if needed
+        return microgrid_bill, player_bills
 
-        if demand == 0:
-            proportion_internal_demand = 1
-        else:
-            proportion_internal_demand = internal_exchange / demand
-
-        if supply == 0:
-            proportion_internal_supply = 1
-        else:
-            proportion_internal_supply = internal_exchange / supply
-
-        purchase_price = internal_price * proportion_internal_demand + external_purchasing_price * (
-                1 - proportion_internal_demand)
-        sale_price = internal_price * proportion_internal_supply + external_selling_price * (
-                1 - proportion_internal_supply)
-
-        self.imbalance[0][time] = proportion_internal_demand
-        self.imbalance[1][time] = proportion_internal_supply
-
-        self.real_prices['purchase'][time] = purchase_price
-        self.real_prices['sale'][time] = sale_price
-
+    def send_prices_to_players(self, initial_prices):
         for player in self.players:
-            load = player.load[time]
-            if load > 0:  # if the player needs energy
-                cost = purchase_price * load * self.dt
-                # the players pays in proportion on and off the grid for his demand
-                player.bill[time] += cost
+            # TODO: a remplacer
+            # player.set_prices(initial_prices)
+            pass
 
-            elif load < 0:  # if the player supply energy
-                revenue = sale_price * load * self.dt  # there is enough demand of engery on the grid
-                player.bill[time] += revenue
-
-    def give_info(self, t):
-        """ Transmit data to the player """
-        # the manager informs the price of the last slot
-        prices = {"purchase": self.real_prices["purchase"][t], "sale": self.real_prices["sale"][t]}
-
+    def send_scenario_to_players(self, scenario):
         for player in self.players:
-            if player.__manager__data["type"] == "charging_station":
-                data_to_player = 0
-            else:
-                data_to_player = self.scenario[player.__manager__data["name"]][t]
-            player.observe(t, data_to_player, prices,
-                           {"purchase_cover": self.imbalance[0][t], "sale_cover": self.imbalance[1][t]})
+            # TODO: a remplacer
+            # player.set_scenario(scenario)
+            pass
 
-    def play(self):
+    def play(self, simulation):
         """ Playing one party """
-        self.draw_random_scenario()
-        for t in range(self.horizon):  # main loop
-            demand, supply = self.energy_balance(t)
-            self.compute_bills(t, demand, supply)
-            self.give_info(t)
+        self.reset()
+        # initialisation de la boucle de coordination
+        scenario = self.draw_random_scenario()
+        self.send_scenario_to_players(scenario)
+        prices = self.initialize_prices()
+        # debut de la coordination
+        for iteration in range(self.nbr_iterations):  # main loop
+            self.send_prices_to_players(prices)
+            microgrid_load, player_loads = self.get_microgrid_load()
+            microgrid_bill, player_bills = self.compute_bills(microgrid_load, player_loads)
+            self.store_results(simulation, iteration,
+                               {
+                                   'scenario': scenario,
+                                   'player_loads': player_loads,
+                                   'player_bills': player_bills,
+                                   'microgrid_load': microgrid_load,
+                                   'microgrid_bill': microgrid_bill
+                               }
+                               )
+            prices, converged = self.get_next_prices(iteration, prices, microgrid_load)
+            if converged:
+                break
+
+    def get_next_prices(self, iteration, prices, microgrid_load):
+        return prices + 0.1, False
+
+    def store_results(self, simulation, iteration, data):
+        self.__results[simulation][iteration] = data
 
     def reset(self):
         # reset the attributes of the manager
-        self.imbalance = np.zeros((2, self.horizon))
-        self.scenario = {}
-        self.grid_load = {"demand": np.zeros(self.horizon), "supply": np.zeros(self.horizon)}
-        self.real_prices = {'purchase': np.zeros(self.horizon), 'sale': np.zeros(self.horizon)}
-
         for player in self.players:  # reset the attributes of thes players
             player.reset()
 
     def simulate(self, nb_simulation, simulation_name):
-        # create a folder
-        for name in [simulation_name, simulation_name + "/data_visualize", simulation_name + "/plot"]:
-            os.makedirs(name, exist_ok=True)
+        # for each simulation
+        for simulation_number in tqdm.range(nb_simulation):
+            self.play(simulation_number)
 
-        # Init tabs infos
-        tab_scenario_IC_SF = {}
-        tab_scenario_CS = {}
-        tab_load = {}
-        tab_bill = {}
-        tab_battery_stock_IC_SF = {}
-        tab_battery_stock_CS = {}
-        mean_bill = {}
-        tab_score = {}
-        score = {}
+        self.reset()
 
-        for player in self.players:
-            name = player.__manager__data['name']
-            tab_load[name] = np.zeros((nb_simulation, self.horizon))
-            tab_bill[name] = np.zeros((nb_simulation, self.horizon))
-            tab_score[name] = np.zeros(nb_simulation)
+        self.data_viz(self.__results)
 
-            if player.__manager__data["type"] == "charging_station":
-                tab_scenario_CS[name] = np.zeros((nb_simulation, 2, 4))
-                tab_battery_stock_CS[name] = np.zeros((nb_simulation, 4, self.horizon + 1))
-
-            else:
-                tab_scenario_IC_SF[name] = np.zeros((nb_simulation, self.horizon))
-                tab_battery_stock_IC_SF[name] = np.zeros((nb_simulation, self.horizon + 1))
-
-        tab_price = {'internal': np.zeros((nb_simulation, self.horizon)),
-                     'external_purchase': np.zeros((nb_simulation, self.horizon)),
-                     'external_sale': np.zeros((nb_simulation, self.horizon))}
-
-        tab_real_price = {'purchase': np.zeros((nb_simulation, self.horizon)),
-                          'sale': np.zeros((nb_simulation, self.horizon))}
-
-        tab_grid_load = {'demand': np.zeros((nb_simulation, self.horizon)),
-                         'supply': np.zeros((nb_simulation, self.horizon))}
-
-        tab_imbalance = {'demand': np.zeros((nb_simulation, self.horizon)),
-                         'supply': np.zeros((nb_simulation, self.horizon))}
-
-        for i in range(nb_simulation):
-
-            self.play()
-
-            tab_grid_load["demand"][i] = self.grid_load["demand"]
-            tab_grid_load["supply"][i] = self.grid_load["supply"]
-
-            tab_imbalance["demand"][i] = self.imbalance[0]
-            tab_imbalance["supply"][i] = self.imbalance[1]
-
-            tab_real_price['sale'][i] = self.real_prices['sale']
-            tab_real_price['purchase'][i] = self.real_prices['purchase']
-
-            for type in ["internal", "external_purchase", "external_sale"]:
-                tab_price[type][i] = self.mean_prices[type]
-
-            for player in self.players:
-                name = player["name"]
-
-                tab_load[name][i] = player.load
-                tab_bill[name][i] = player.bill
-
-                if player["type"] == "charging_station":
-
-                    tab_scenario_CS[name][i] = self.scenario[name]
-
-                    new_bat = np.concatenate((player.battery_stock["slow"], player.battery_stock["fast"]), axis=1)
-                    new_bat = np.transpose(new_bat)
-
-                    tab_battery_stock_CS[name][i] = new_bat
-                    tab_score[name][i] = np.sum(tab_bill[name][i]) - 16 * np.mean(self.real_prices["purchase"])
-                    # we substract the neutral bill to sustain
-                else:
-                    tab_scenario_IC_SF[name][i] = self.scenario[name]
-
-                    tab_battery_stock_IC_SF[name][i] = player.battery_stock
-
-                    if player["type"] == "solar_farm":
-                        tab_score[name][i] = np.sum(tab_bill[name][i]) + self.dt * np.dot(np.array(player.sun),
-                                                                                          self.real_prices['sale'])
-
-                    else:
-                        tab_score[name][i] = np.sum(tab_bill[name][i]) - self.dt * np.dot(np.array(player.demand),
-                                                                                          self.real_prices['purchase'])
-
-            self.reset()
-
-        for player in self.players:
-            name = player.__manager__data["name"]
-            _sum = np.sum(tab_bill[name], axis=1)
-            mean_bill[name] = np.mean(_sum)
-            score[name] = np.mean(tab_score[name])
-
-        np.save(simulation_name + "/data_visualize/imbalance_simulation", np.array([tab_imbalance]))
-        np.save(simulation_name + "/data_visualize/load_simulation", np.array([tab_load]))
-        np.save(simulation_name + "/data_visualize/bill_simulation", np.array([tab_bill]))
-        np.save(simulation_name + "/data_visualize/price_simulation", np.array([tab_price]))
-        np.save(simulation_name + "/data_visualize/battery_stock_simulation_IC_SF", np.array([tab_battery_stock_IC_SF]))
-        np.save(simulation_name + "/data_visualize/battery_stock_simulation_CS", np.array([tab_battery_stock_CS]))
-        np.save(simulation_name + "/data_visualize/scenario_simulation_IC_SF", np.array([tab_scenario_IC_SF]))
-        np.save(simulation_name + "/data_visualize/scenario_simulation_CS", np.array([tab_scenario_CS]))
-        np.save(simulation_name + "/data_visualize/grid_load_simulation", np.array([tab_grid_load]))
-        np.save(simulation_name + "/data_visualize/mean_bill_simulation", np.array([mean_bill]))
-        np.save(simulation_name + "/data_visualize/real_price_simulation", np.array([tab_real_price]))
-        np.save(simulation_name + "/data_visualize/score_simulation", np.array([score]))
+    def data_viz(self, data):
+        pass
