@@ -91,6 +91,7 @@ class Manager:
                         list_day=[]
                         for heure in range (24):
                             list_day.append(solar_data["pv_prod (W/m2)"][8760*region+24*jour+heure])
+                            list_day.append(solar_data["pv_prod (W/m2)"][8760*region+24*jour+heure])
                         reg[day_name]=list_day
                     scenario_solar[region_name]=reg
                 scenario[player_type]=scenario_solar
