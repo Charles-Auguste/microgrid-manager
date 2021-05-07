@@ -71,8 +71,14 @@ class Manager:
 
     def initialize_prices(self):
         """initialize daily prices"""
-        # TODO do we need a more complex price initialization
-        return {"purchase": np.zeros(self.horizon), "sale": np.zeros(self.horizon)}
+        purchase_prices=np.zeros(self.horizon)
+        sale_prices=np.zeros(self.horizon)
+        purchase_0=1
+        sale_0=1
+        for i in range (self.horizon):
+            purchase_prices[i]=purchase_0
+            sale_prices[i]=sale_0
+        return {"purchase": purchase_prices, "sale": sale_prices}
 
     def draw_random_scenario(self):
         """ Draw a scenario for the day """
@@ -101,19 +107,24 @@ class Manager:
         """ Compute the bill of each players """
         microgrid_bill = 0
         player_bills = np.zeros(len(self.players))
-        # TODO complete if needed
+        for i in range (self.horizon):
+            microgrid_bill=microgrid_load[i]*self.prices("purchase")[i]
+            for j in range (len(self.players)):
+                player=self.player[j]
+                for i in range (self.horizon):
+                    player_bills[j]+=self.prices("purchase")[i]*loads[player][i]
         return microgrid_bill, player_bills
 
     def send_prices_to_players(self, initial_prices):
         for player in self.players:
             # TODO: a remplacer
-            # player.set_prices(initial_prices)
+            player.set_prices(initial_prices)
             pass
 
     def send_scenario_to_players(self, scenario):
         for player in self.players:
             # TODO: a remplacer
-            # player.set_scenario(scenario)
+            #player.set_scenario(scenario)
             pass
 
     def play(self, simulation):
@@ -142,7 +153,23 @@ class Manager:
                 break
 
     def get_next_prices(self, iteration, prices, microgrid_load):
-        return prices + 0.1, False
+        K=1 #facteur de pénalisation
+        old_purchase=prices.get("purchase")
+        old_sale=prices.get("sale")
+        purchase_prices = np.zeros(self.horizon)
+        sale_prices = np.zeros(self.horizon)
+        purchase_0 = 1
+        sale_0 = 1
+        for i in range (self.horizon):
+            purchase_prices[i]=purchase_0+K*microgrid_load[i]
+            sale_prices[i]=sale_0+K*microgrid_load[i]
+        converge=true
+        epsilon=0.1
+        for i in range (self.horizon):
+            if (abs(old_purchase[i]-purchase_prices[i])+abs(old_sale[i]-sale_prices[i])>epsilon):
+                converge=false
+        new_prices={"purchase": purchase_prices, "sale": sale_prices}
+        return new_prices, converge
 
     def store_results(self, simulation, iteration, data):
         self.__results[simulation][iteration] = data
