@@ -58,15 +58,69 @@ class Manager:
         for player in self.players:
             player_type = player.__manager__data["type"]
             if player_type == "charging_station":
-                # TODO : a remplacer
-                pass
-                data = pandas.DataFrame()
+                
+                #STATION DE RECHARGE
+                car_data=pandas.read_csv(os.path.join(data_dir,"ev_scenarios.csv" ),delimiter = ";")
+                nb_car=10
+                charging_station={}
+                for day in range (365):
+                    day_name="scenario_"+str(day+1)
+                    day_data={}
+                    for car in range (10):
+                        car_name="car_"+str(car+1)
+                        car_dep_arr=[car_data["time_slot_dep"][10*day+car],car_data["time_slot_arr"][10*day+car]]
+                        day_data[car_name]=car_dep_arr
+                    charging_station[day_name]=day_data
+                scenario[player_type]=charging_station
+
+                #================================================================================================================================================================
+                # pour acceder aux horaires de départ et d'arrivée d'une voiture pendant une journée : scenario["charging_station"]["scenario_i"]["car_j"]  --> renvoie une liste
+                #================================================================================================================================================================
+
             elif player_type == "solar_farm":
-                # TODO : a remplacer
-                pass
-                data = None
-            # TODO : a completer
-            scenario[player_type] = data
+                
+                # FERME SOLAIRE
+                solar_data=pandas.read_csv(os.path.join(data_dir,"pv_prod_scenarios.csv" ),delimiter = ";")
+                # 8 régions, 365 jours, 24 heures
+                scenario_solar={}
+                for region in range (8):
+                    region_name="region_"+str(region+1)
+                    reg={} 
+                    for jour in range (365):
+                        day_name="scenario_"+str(jour+1)
+                        list_day=[]
+                        for heure in range (24):
+                            list_day.append(solar_data["pv_prod (W/m2)"][8760*region+24*jour+heure])
+                        reg[day_name]=list_day
+                    scenario_solar[region_name]=reg
+                scenario[player_type]=scenario_solar
+
+
+                #======================================================================================================
+                # pour acceder à une journée : scenario["solar_farm"]["region_i"]["scenario_j"]  --> renvoie une liste
+                #======================================================================================================
+
+            else:
+                
+                # COMPLEXE INDUSTRIEL
+                industrial_data=pandas.read_csv(os.path.join(data_dir,"indus_cons_scenarios.csv" ),delimiter = ";")
+                nb_scenarios=0
+                for i in industrial_data.index:
+                    if(industrial_data["time_slot"][i]==1):
+                        nb_scenarios+=1
+                scenario_industrial={}
+                for i in range (nb_scenarios):
+                    nom_scenario="scenario_"+str(i+1)
+                    list_scenario=[]
+                    for j in range (48):
+                        list_scenario.append(industrial_data["cons (kW)"][48*i+j])
+                    scenario_industrial[nom_scenario]=list_scenario
+                scenario[player_type]=scenario_industrial
+
+                #===============================================================================================
+                # pour acceder à une journée : scenario["industrial_farm"]["scenario_i"]  --> renvoie une liste
+                #===============================================================================================
+
         return scenario
 
     def initialize_prices(self):
@@ -85,8 +139,19 @@ class Manager:
         scenario = {}
         for player in self.players:
             player_type = player.__manager__data["type"]
-            # TODO: remplacer par un scenario aleatoire dans self.scenarios[player_type]
-            scenario[player_type] = None
+            if (player_type=="solar_farm"):
+                nb_region=random.randint(1,8)
+                nb_scenario=random.randint(1,365)
+                random_scenario=self.scenarios["solar_farm"]["region_"+str(nb_region)]["scenario_"+str(nb_scenario)]
+                scenario[player_type] = random_scenario
+            elif (player_type=="charging_station"):
+                nb_scenario=random.randint(1,365)
+                random_scenario=self.scenarios["charging_station"]["scenario_"+str(nb_scenario)]
+                scenario[player_type] = random_scenario
+            else:
+                nb_scenario=random.randint(1,90)
+                random_scenario=self.scenarios["industrial_farm"]["scenario_"+str(nb_scenario)]
+                scenario[player_type] = random_scenario            
         return scenario
 
     def get_microgrid_load(self):
