@@ -17,10 +17,12 @@ class Manager:
         self.nb_pdt = int(self.horizon/self.dt)
 
         self.region = region
+        self.team_name = team_name
+        self.path_to_player_file = path_to_player_file
 
         self.players = self.create_players(team_name, path_to_player_file)
         self.scenarios = self.read_all_scenarios()
-        self.external_prices = {"purchase": np.zeros(self.horizon), "sale": np.zeros(self.horizon)}
+        self.external_prices = self.read_national_grid_prices(path_to_price_file)
 
         self.__results = defaultdict(dict)
 
@@ -56,6 +58,12 @@ class Manager:
 
         return new_players
 
+    def read_national_grid_prices(self, path):
+        """initialize daily scenarios"""
+        prices_data = pandas.read_csv(path, header=None, delimiter=" ")
+        prices = prices_data.iloc[0].to_numpy()
+        return {'purchase': prices, 'sale':prices.copy()}
+
     def read_all_scenarios(self):
         """initialize daily scenarios"""
 
@@ -77,7 +85,7 @@ class Manager:
                     day_data={}
                     for car in range (10):
                         car_name="car_"+str(car+1)
-                        car_dep_arr=[car_data["time_slot_dep"][10*day+car],car_data["time_slot_arr"][10*day+car]]
+                        car_dep_arr=[car_data["time_slot_dep"][10*day+car]*2,car_data["time_slot_arr"][10*day+car]*2]
                         day_data[car_name]=car_dep_arr
                     charging_station[day_name]=day_data
                 scenario[player_type]=charging_station
@@ -93,11 +101,11 @@ class Manager:
                 # 8 régions, 365 jours, 24 heures
                 scenario_solar={}
                 for region in range (8):
-                    region_name="region_"+str(region+1)
+                    region_name = solar_data['region'][8760*region]
                     reg={} 
                     for jour in range (365):
-                        day_name="scenario_"+str(jour+1)
-                        list_day=[]
+                        day_name = "scenario_"+str(jour+1)
+                        list_day = []
                         for heure in range (24):
                             list_day.append(solar_data["pv_prod (W/m2)"][8760*region+24*jour+heure])
                             list_day.append(solar_data["pv_prod (W/m2)"][8760*region+24*jour+heure])
@@ -156,7 +164,7 @@ class Manager:
                 id_scenario = random.choice(list(self.scenarios[player_type][self.region].keys()))
                 random_scenario = self.scenarios[player_type][self.region][id_scenario]
                 scenario[player_type] = random_scenario
-            elif player_type in ["charging_station", 'industrial_consumer', 'data_center']:
+            elif player_type in ["charging_station", 'industrial_consumer']:
                 id_scenario = random.choice(list(self.scenarios[player_type].keys()))
                 random_scenario = self.scenarios[player_type][id_scenario]
                 scenario[player_type] = random_scenario
@@ -170,36 +178,37 @@ class Manager:
         loads = {}
 
         for player in self.players:
-            load = player.compute_load()
+            load = player.compute_all_load()
 
             microgrid_load += np.max(load, 0)
             # storing loads for each player for future backup
-            loads[player] = load
+            loads[player.__manager__data['type']] = load
 
         return microgrid_load, loads
 
-    def compute_bills(self, microgrid_load, loads):
+    def compute_bills(self, microgrid_load, loads, prices):
         """ Compute the bill of each players """
         microgrid_bill = 0
-        player_bills = np.zeros(len(self.players))
+        player_bills = defaultdict(float)
         for i in range (self.horizon):
-            microgrid_bill=microgrid_load[i]*self.prices("purchase")[i]
-            for j in range (len(self.players)):
-                player=self.player[j]
+            microgrid_bill += microgrid_load[i]*prices.get("purchase")[i]
+            for j in range(len(self.players)):
+                player = self.players[j]
                 for i in range (self.horizon):
-                    player_bills[j]+=self.prices("purchase")[i]*loads[player][i]
+                    player_bills[player.__manager__data['type']] += prices.get("purchase")[i]*loads[player.__manager__data['type']][i]
         return microgrid_bill, player_bills
 
-    def send_prices_to_players(self, initial_prices):
+    def send_prices_to_players(self, prices):
         for player in self.players:
             # TODO: a remplacer
-            player.set_prices(initial_prices)
+            player.set_prices(prices)
             pass
 
     def send_scenario_to_players(self, scenario):
         for player in self.players:
             # TODO: a remplacer
-            #player.set_scenario(scenario)
+            if player.__manager__data['type'] in scenario:
+                player.set_scenario(scenario[player.__manager__data['type']])
             pass
 
     def play(self, simulation):
@@ -213,7 +222,7 @@ class Manager:
         for iteration in range(self.nbr_iterations):  # main loop
             self.send_prices_to_players(prices)
             microgrid_load, player_loads = self.get_microgrid_load()
-            microgrid_bill, player_bills = self.compute_bills(microgrid_load, player_loads)
+            microgrid_bill, player_bills = self.compute_bills(microgrid_load, player_loads, prices)
             self.store_results(simulation, iteration,
                                {
                                    'scenario': scenario,
@@ -251,7 +260,7 @@ class Manager:
 
     def reset(self):
         # reset the attributes of the manager
-        for player in self.players:  # reset the attributes of thes players
+        for player in self.players:
             player.reset()
 
     def simulate(self, nb_simulation, simulation_name):
