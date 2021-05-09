@@ -3,3 +3,4 @@ GitPython
 pandas
 tqdm
 matplotlib
+pulp
