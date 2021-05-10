@@ -178,12 +178,10 @@ class Manager:
                 id_scenario = random.choice(list(self.scenarios[player_type][self.region].keys()))
                 random_scenario = self.scenarios[player_type][self.region][id_scenario]
                 scenario[player_type] = random_scenario
-            elif player_type in ["charging_station", 'industrial_consumer']:
+            elif player_type in ["charging_station", 'industrial_consumer','data_center']:
                 id_scenario = random.choice(list(self.scenarios[player_type].keys()))
                 random_scenario = self.scenarios[player_type][id_scenario]
-                scenario[player_type] = random_scenario
-            else:
-                pass
+                scenario[player_type] = random_scenario            
         return scenario
 
     def get_microgrid_load(self):
