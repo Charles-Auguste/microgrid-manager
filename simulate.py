@@ -140,7 +140,21 @@ class Manager:
                 # pour acceder à une journée : scenario["industrial_farm"]["scenario_i"]  --> renvoie une liste
                 #===============================================================================================
             elif player_type == "data_center":
-                pass
+                                 
+                #DATA CENTER
+                dcenter_data=pandas.read_csv(os.path.join(data_dir,"data_center_scenarios.csv" ),delimiter = ";")
+                data_center={}
+                for scenar in range(10):
+                    list_scenar=[]
+                    scenar_name="scenario_"+str(scenar+1)
+                    for time in range (48):
+                        list_scenar.append(dcenter_data["cons (kW)"][10*scenar+time])
+                    data_center[scenar_name]=list_scenar
+                scenario["data_center"]=data_center
+
+                #================================================================================================
+                # pour acceder à un scenario : scenario["data_center"]["scenario_i"]  --> renvoie une liste
+                #================================================================================================
 
         return scenario
 
