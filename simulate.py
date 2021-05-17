@@ -6,17 +6,16 @@ import os
 from collections import defaultdict
 import pandas
 import tqdm
-import matplotlib.pyplot as plt
 
 
 class Manager:
-    def __init__(self, team_name: str, path_to_player_file, path_to_price_file, region: str):
-        self.horizon = 48
+    def __init__(self, team_name: str, path_to_player_file, path_to_price_file, regions):
+        self.horizon = 24
         self.dt = 0.5
-        self.nbr_iterations = 50
+        self.nbr_iterations = 10
         self.nb_pdt = int(self.horizon/self.dt)
 
-        self.region = region
+        self.regions = regions
         self.team_name = team_name
         self.path_to_player_file = path_to_player_file
 
@@ -25,6 +24,7 @@ class Manager:
         self.external_prices = self.read_national_grid_prices(path_to_price_file)
 
         self.__results = defaultdict(dict)
+        self.scenarios_per_actor = {}
 
     def create_players(self, team_name: str, json_file):
         """initialize all players"""
@@ -39,7 +39,7 @@ class Manager:
             raise ValueError(f'team {team_name} is not found')
 
         if isinstance(team, dict):
-            for player_type in ['charging_station', 'data_center', 'industrial_consumer', 'solar_farm']:
+            for player_type in ['solar_farm', 'industrial_consumer']: #['charging_station', 'data_center', 'industrial_consumer', 'solar_farm']:
                 player = {}
                 player['team'] = team_name
                 player['type'] = player_type
@@ -72,19 +72,18 @@ class Manager:
         # les scenarios pour chaque type de player
         scenario = {}
 
-        for player in self.players:
-            player_type = player.__manager__data["type"]
+        for player_type in ['industrial_consumer', 'data_center', 'solar_farm', 'charging_station']:
             if player_type == "charging_station":
                 
                 #STATION DE RECHARGE
-                car_data=pandas.read_csv(os.path.join(data_dir, "charging_station/ev_scenarios.csv"), delimiter =";")
+                car_data=pandas.read_csv(os.path.join(data_dir, "charging_station", "ev_scenarios.csv"), delimiter =";")
                 nb_car=10
                 charging_station={}
                 for day in range (365):
-                    day_name="scenario_"+str(day+1)
+                    day_name="scenario_"+str(day)
                     day_data={}
                     for car in range (10):
-                        car_name="car_"+str(car+1)
+                        car_name="car_"+str(car)
                         car_dep_arr=[car_data["time_slot_dep"][10*day+car]*2,car_data["time_slot_arr"][10*day+car]*2]
                         day_data[car_name]=car_dep_arr
                     charging_station[day_name]=day_data
@@ -97,14 +96,14 @@ class Manager:
             elif player_type == "solar_farm":
                 
                 # FERME SOLAIRE
-                solar_data=pandas.read_csv(os.path.join(data_dir, "solar_farm/pv_prod_scenarios.csv"), delimiter =";")
+                solar_data=pandas.read_csv(os.path.join(data_dir, "solar_farm", "pv_prod_scenarios.csv"), delimiter =";")
                 # 8 régions, 365 jours, 24 heures
                 scenario_solar={}
                 for region in range (8):
                     region_name = solar_data['region'][8760*region]
                     reg={} 
                     for jour in range (365):
-                        day_name = "scenario_"+str(jour+1)
+                        day_name = "scenario_"+str(jour)
                         list_day = []
                         for heure in range (24):
                             list_day.append(solar_data["pv_prod (W/m2)"][8760*region+24*jour+heure])
@@ -122,14 +121,14 @@ class Manager:
                 
                 # COMPLEXE INDUSTRIEL
                 industrial_data=pandas.read_csv(os.path.join(data_dir,
-                                                             "industrial_consumer/indus_cons_scenarios.csv"), delimiter =";")
+                                                             "industrial_consumer", "indus_cons_scenarios.csv"), delimiter =";")
                 nb_scenarios=0
                 for i in industrial_data.index:
                     if(industrial_data["time_slot"][i]==1):
                         nb_scenarios+=1
                 scenario_industrial={}
                 for i in range (nb_scenarios):
-                    nom_scenario="scenario_"+str(i+1)
+                    nom_scenario="scenario_"+str(i)
                     list_scenario=[]
                     for j in range (48):
                         list_scenario.append(industrial_data["cons (kW)"][48*i+j])
@@ -142,12 +141,12 @@ class Manager:
             elif player_type == "data_center":
                                  
                 #DATA CENTER
-                dcenter_data=pandas.read_csv(os.path.join(data_dir,"data_center_scenarios.csv" ),delimiter = ";")
+                dcenter_data=pandas.read_csv(os.path.join(data_dir,"data_center", "data_center_scenarios.csv" ),delimiter = ";")
                 data_center={}
                 for scenar in range(10):
                     list_scenar=[]
-                    scenar_name="scenario_"+str(scenar+1)
-                    for time in range (48):
+                    scenar_name="scenario_"+str(scenar)
+                    for time in range(48):
                         list_scenar.append(dcenter_data["cons (kW)"][10*scenar+time])
                     data_center[scenar_name]=list_scenar
                 scenario["data_center"]=data_center
@@ -160,28 +159,31 @@ class Manager:
 
     def initialize_prices(self):
         """initialize daily prices"""
-        purchase_prices = np.zeros(self.horizon)
-        sale_prices = np.zeros(self.horizon)
-        purchase_0=1
-        sale_0=1
-        for i in range (self.horizon):
-            purchase_prices[i]=purchase_0
-            sale_prices[i]=sale_0
+        purchase_prices = np.zeros(self.nb_pdt)
+        sale_prices = np.zeros(self.nb_pdt)
         return {"purchase": purchase_prices, "sale": sale_prices}
 
-    def draw_random_scenario(self):
+    def draw_random_scenario(self, region):
         """ Draw a scenario for the day """
         scenario = {}
-        for player in self.players:
-            player_type = player.__manager__data["type"]
+        for player_type in ['industrial_consumer', 'solar_farm', 'data_center', 'charging_station']:
             if player_type == "solar_farm":
-                id_scenario = random.choice(list(self.scenarios[player_type][self.region].keys()))
-                random_scenario = self.scenarios[player_type][self.region][id_scenario]
+                id_scenario = random.choice(list(self.scenarios[player_type][region].keys()))
+                random_scenario = self.scenarios[player_type][region][id_scenario]
                 scenario[player_type] = random_scenario
-            elif player_type in ["charging_station", 'industrial_consumer','data_center']:
+                self.scenarios_per_actor[player_type] = region # int(id_scenario.split('_')[-1])
+            elif player_type in ["charging_station", 'industrial_consumer', 'data_center']:
                 id_scenario = random.choice(list(self.scenarios[player_type].keys()))
                 random_scenario = self.scenarios[player_type][id_scenario]
-                scenario[player_type] = random_scenario            
+                scenario[player_type] = random_scenario
+                self.scenarios_per_actor[player_type] = id_scenario # int(id_scenario.split('_')[-1])
+        return scenario
+
+    def switch_region(self, scenario, region):
+        id_scenario = random.choice(list(self.scenarios['solar_farm'][region].keys()))
+        random_scenario = self.scenarios['solar_farm'][region][id_scenario]
+        scenario['solar_farm'] = random_scenario
+        self.scenarios_per_actor['solar_farm'] = region  # int(id_scenario.split('_')[-1])
         return scenario
 
     def get_microgrid_load(self):
@@ -192,7 +194,7 @@ class Manager:
         for player in self.players:
             load = player.compute_all_load()
 
-            microgrid_load += np.max(load, 0)
+            microgrid_load += load
             # storing loads for each player for future backup
             loads[player.__manager__data['type']] = load
 
@@ -202,11 +204,11 @@ class Manager:
         """ Compute the bill of each players """
         microgrid_bill = 0
         player_bills = defaultdict(float)
-        for i in range (self.horizon):
+        for i in range (self.nb_pdt):
             microgrid_bill += microgrid_load[i]*prices.get("purchase")[i]
             for j in range(len(self.players)):
                 player = self.players[j]
-                for i in range (self.horizon):
+                for i in range (self.nb_pdt):
                     player_bills[player.__manager__data['type']] += prices.get("purchase")[i]*loads[player.__manager__data['type']][i]
         return microgrid_bill, player_bills
 
@@ -223,11 +225,10 @@ class Manager:
                 player.set_scenario(scenario[player.__manager__data['type']])
             pass
 
-    def play(self, simulation):
+    def play(self, scenario, region):
         """ Playing one party """
         self.reset()
         # initialisation de la boucle de coordination
-        scenario = self.draw_random_scenario()
         self.send_scenario_to_players(scenario)
         prices = self.initialize_prices()
         # debut de la coordination
@@ -235,7 +236,7 @@ class Manager:
             self.send_prices_to_players(prices)
             microgrid_load, player_loads = self.get_microgrid_load()
             microgrid_bill, player_bills = self.compute_bills(microgrid_load, player_loads, prices)
-            self.store_results(simulation, iteration,
+            self.store_results(region, iteration,
                                {
                                    'scenario': scenario,
                                    'player_loads': player_loads,
@@ -249,23 +250,14 @@ class Manager:
                 break
 
     def get_next_prices(self, iteration, prices, microgrid_load):
-        K=1 #facteur de pénalisation
-        old_purchase=prices.get("purchase")
-        old_sale=prices.get("sale")
-        purchase_prices = np.zeros(self.horizon)
-        sale_prices = np.zeros(self.horizon)
-        purchase_0 = 1
-        sale_0 = 1
-        for i in range (self.horizon):
-            purchase_prices[i]=purchase_0+K*microgrid_load[i]
-            sale_prices[i]=sale_0+K*microgrid_load[i]
-        converge=True
-        epsilon=0.1
-        for i in range (self.horizon):
-            if (abs(old_purchase[i]-purchase_prices[i])+abs(old_sale[i]-sale_prices[i])>epsilon):
-                converge=False
-        new_prices={"purchase": purchase_prices, "sale": sale_prices}
-        return new_prices, converge
+        old_purchase = prices.get("purchase")
+        old_sale = prices.get("sale")
+        grad = microgrid_load - np.mean(microgrid_load)
+        dp = 1e-3 * 0.99**iteration
+        purchase_prices = old_purchase + dp * grad
+        sale_prices = old_sale + dp * grad
+        new_prices = dict(purchase=purchase_prices, sale=sale_prices)
+        return new_prices, False
 
     def store_results(self, simulation, iteration, data):
         self.__results[simulation][iteration] = data
@@ -277,12 +269,31 @@ class Manager:
 
     def simulate(self, nb_simulation, simulation_name):
         # for each simulation
-        for simulation_number in tqdm.trange(nb_simulation):
-            self.play(simulation_number)
+        scenario = self.draw_random_scenario(self.regions[0])
+        for region in self.regions:
+            scenario = self.switch_region(scenario, region)
+            self.play(scenario, region)
 
         self.reset()
 
         self.data_viz(self.__results)
 
-    def data_viz(self, data):
-        pass
+    def data_viz(self, results):
+        data = {}
+        for region, region_data in results.items():
+            ptr = data
+            for player_type in ['industrial_consumer', 'data_center', 'solar_farm', 'charging_station']:
+                key = self.scenarios_per_actor[player_type]
+                if player_type == 'solar_farm':
+                    key = region
+                if key not in ptr:
+                    ptr[key] = {}
+                ptr = ptr[key]
+            if self.team_name not in ptr:
+                ptr[self.team_name] = {}
+            ptr = ptr[self.team_name]
+            for iteration, data_iter in region_data.items():
+                ptr[iteration] = data_iter['player_loads']
+        print(data)
+        from visualize_v2 import generate_pptx
+        generate_pptx(data)
