@@ -86,38 +86,44 @@ def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs:
     Note that above the last threshold the tariff is linearly extrapolated based
     on the last two values
     :param delta_t_s: time-slot duration of the considered discrete time model
-    :return: returns two dict. with the same keys as load_profiles excepting the one
-    of the actors and values the aggregated microgrid load prof. and a dict.
-    {"pmax_cost": cost of contracted max power, "autonomy_score": score of 
+    :return: returns 3 dict. with the same keys as load_profiles excepting the one
+    of the actors and values the aggregated microgrid load prof. and microgrid pmax,
+    and a dict. {"pmax_cost": cost of contracted max power, "autonomy_score": score of 
     autonomy measuring how much the microgrid is exchanging energy with the grid}
     """
 
     microgrid_prof = {}
+    microgrid_pmax = {}
     collective_metrics = {}
     
     # Loop over Industrial Cons. scenarios
     for ic_scen in load_profiles:
         microgrid_prof[ic_scen] = {}
+        microgrid_pmax[ic_scen] = {}
         collective_metrics[ic_scen] = {}
         
         # loop over Data Center scenarios
         for dc_scen in load_profiles[ic_scen]:
             microgrid_prof[ic_scen][dc_scen] = {}
+            microgrid_pmax[ic_scen][dc_scen] = {}
             collective_metrics[ic_scen][dc_scen] = {}
     
             # Loop over PV scenarios
             for pv_scen in load_profiles[ic_scen][dc_scen]:
                 microgrid_prof[ic_scen][dc_scen][pv_scen] = {}
+                microgrid_pmax[ic_scen][dc_scen][pv_scen] = {}
                 collective_metrics[ic_scen][dc_scen][pv_scen] = {}
 
                 # Loop over EV scenarios
                 for ev_scen in load_profiles[ic_scen][dc_scen][pv_scen]:
                     microgrid_prof[ic_scen][dc_scen][pv_scen][ev_scen] = {}
+                    microgrid_pmax[ic_scen][dc_scen][pv_scen][ev_scen] = {}
                     collective_metrics[ic_scen][dc_scen][pv_scen][ev_scen] = {}
                     
                     # Loop over microgrid team names
                     for mg_name in load_profiles[ic_scen][dc_scen][pv_scen][ev_scen]:
                         microgrid_prof[ic_scen][dc_scen][pv_scen][ev_scen][mg_name] = {}
+                        microgrid_pmax[ic_scen][dc_scen][pv_scen][ev_scen][mg_name] = {}
                         collective_metrics[ic_scen][dc_scen][pv_scen][ev_scen][mg_name] = {}
 
                         # Loop over iterations of the current microgrid team
@@ -131,9 +137,13 @@ def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs:
                                     [mg_name][i_iter] = current_microgrid_prof
                             
                             # obtain collective metrics based on this profile
+                            current_pmax, current_pmax_cost = \
+                                calculate_pmax_cost(current_microgrid_prof,
+                                                    contracted_p_tariffs)
+                            microgrid_pmax[ic_scen][dc_scen][pv_scen][ev_scen][mg_name][i_iter] \
+                                = current_pmax
                             collective_metrics[ic_scen][dc_scen][pv_scen][ev_scen][mg_name][i_iter] \
-                              = {"pmax_cost": calculate_pmax_cost(current_microgrid_prof,
-                                                                  contracted_p_tariffs),
+                              = {"pmax_cost": current_pmax_cost,
                                  "autonomy_score": calculate_autonomy_score(current_microgrid_prof,
                                                                             delta_t_s),
                                  "mg_transfo_aging": calculate_transfo_aging(current_microgrid_prof,
@@ -141,7 +151,7 @@ def calc_microgrid_collective_metrics(load_profiles: dict, contracted_p_tariffs:
                                  "n_disj": calculate_number_of_disj(current_microgrid_prof,
                                                                     delta_t_s)}
     
-    return microgrid_prof, collective_metrics
+    return microgrid_prof, microgrid_pmax, collective_metrics
     
 def calculate_bill(load_profile: np.ndarray, purchase_price: np.ndarray,
                    sale_price: np.ndarray, delta_t_s: int) -> float:
@@ -154,7 +164,7 @@ def calculate_microgrid_profile(per_actor_load_prof: dict) -> np.ndarray:
     Calculate microgrid profile based on per-actor ones
     """
     
-    return sum([per_actor_load_prof[elt] for elt in per_actor_load_prof])
+    return np.sum([per_actor_load_prof[elt] for elt in per_actor_load_prof], axis=0)
 
 def calculate_pmax_cost(daily_microgrid_prof: np.ndarray, 
                         contracted_p_tariffs: dict) -> float:
@@ -165,7 +175,7 @@ def calculate_pmax_cost(daily_microgrid_prof: np.ndarray,
     positive or negative
     :param contracted_p_tariffs: dict. with keys the upper power thresholds
     and values the associated tariffs
-    :return: returns the pmax cost
+    :return: returns (pmax, pmax cost)
     """
     
     # get all thresholds values and sort them
@@ -174,7 +184,8 @@ def calculate_pmax_cost(daily_microgrid_prof: np.ndarray,
 
     # if microgrid max. load (power) bigger than pmax values in contract, extrapolate    
     if max(abs(daily_microgrid_prof)) > power_thresholds[-1]:
-        return contracted_p_tariffs[power_thresholds[-1]] + \
+        return max(abs(daily_microgrid_prof)), \
+                    contracted_p_tariffs[power_thresholds[-1]] + \
                 (max(abs(daily_microgrid_prof)) - power_thresholds[-1]) \
                  * (contracted_p_tariffs[power_thresholds[-1]] \
                                 - contracted_p_tariffs[power_thresholds[-2]]) \
@@ -184,7 +195,8 @@ def calculate_pmax_cost(daily_microgrid_prof: np.ndarray,
     else:
         idx_p_threshold = np.where(power_thresholds \
                                        >= max(abs(daily_microgrid_prof)))[0][0]
-        return contracted_p_tariffs[power_thresholds[idx_p_threshold]]
+        return power_thresholds[idx_p_threshold], \
+                        contracted_p_tariffs[power_thresholds[idx_p_threshold]]
 
 def calculate_autonomy_score(daily_microgrid_prof: np.ndarray, delta_t_s: int) -> float:
     """
@@ -297,12 +309,12 @@ def get_france_team_classif(team_scores: dict) -> dict:
     """
     
     team_names = list(team_scores)
-    
+
     team_france_scores = {team: sum(team_scores[team].values()) for team in team_scores}
     
     ordered_idx = np.argsort(list(team_france_scores.values()))
     
-    france_team_classif = {i+1: team_names[ordered_idx[i]] \
+    france_team_classif = {i+1: (team_france_scores[team_names[ordered_idx[i]]], team_names[ordered_idx[i]]) \
                                        for i in range(len(team_france_scores))}
     
     return team_france_scores, france_team_classif
@@ -694,15 +706,18 @@ def get_improvement_traj(current_dir: str, list_of_run_dates: list, team_names: 
     
     # loop over run folders
     for run_date in list_of_run_dates:
-        current_df = pd.read_csv(os.path.join(current_dir,
-                                              "run_%s" % run_date.strftime("%Y-%m-%d_%H%M"),
-                                              "aggreg_per_region_res_run_%s.csv" \
-                                              % run_date.strftime("%Y-%m-%d_%H%M")),
-                                 sep=";", decimal=".")
-        for team in team_names:
-            # score of current run is the sum of scores over all regions
-            scores_traj[team][run_date] = \
-                        sum(list(current_df[current_df["team"]==team]["score"]))
+        try:
+            current_df = pd.read_csv(os.path.join(current_dir,
+                                                  "run_%s" % run_date.strftime("%Y-%m-%d_%H%M"),
+                                                  "aggreg_per_region_res_run_%s.csv" \
+                                                  % run_date.strftime("%Y-%m-%d_%H%M")),
+                                     sep=";", decimal=".")
+            for team in team_names:
+                # score of current run is the sum of scores over all regions
+                scores_traj[team][run_date] = \
+                            sum(list(current_df[current_df["team"]==team]["score"]))
+        except:
+            pass
     
     return scores_traj      
                                 
@@ -773,7 +788,7 @@ if __name__ == "__main__":
     # Test collective metrics calculation
     contracted_p_tariffs = {6: 123.6, 9: 151.32, 12: 177.24, 15: 201.36,
                             18: 223.68, 24: 274.68, 30: 299.52, 36: 337.56}
-    microgrid_prof, collective_metrics = \
+    microgrid_prof, microgrid_pmax, collective_metrics = \
             calc_microgrid_collective_metrics(load_profiles, contracted_p_tariffs, 
                                               delta_t_s)
     print("first collective metric (eur/year, kWh): ",

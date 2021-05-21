@@ -23,7 +23,7 @@ from calc_output_metrics import calc_per_actor_bills, calc_microgrid_collective_
 
 # TODO get data from simu OJ format
 
-def generate_pptx(data):
+def generate_pptx(data, pv_profiles):
     current_dir = os.getcwd()
     date_of_run = datetime.datetime.now()
     idx_run = 1
@@ -78,10 +78,10 @@ def generate_pptx(data):
     # and microgrid profile and collective metrics 
     # = two dict. with the same keys as load_profiles excepting the one
     # of the actors and values the aggregated microgrid load prof. (for microgrid_prof) 
-    # and a dict. {"pmax_cost": cost of contracted max power, "autonomy_score": score of 
+    # and a dict. {"pmax_cost": cost of contracted max power, "autonomy_score": score of
     # autonomy measuring how much the microgrid is exchanging energy with the grid} (for
     # collective metrics)
-    microgrid_prof, collective_metrics = \
+    microgrid_prof, microgrid_pmax, collective_metrics = \
             calc_microgrid_collective_metrics(load_profiles, contracted_p_tariffs, 
                                               delta_t_s)
 
@@ -122,8 +122,8 @@ def generate_pptx(data):
 
     # create powerpoint with a summary of current run results
     create_summary_of_run_ppt(result_dir, date_of_run, idx_run, optim_period,
-                              coord_method, regions_map_file, load_profiles,
-                              microgrid_prof, cost_autonomy_tradeoff, team_scores,
+                              coord_method, regions_map_file, pv_profiles, load_profiles,
+                              microgrid_prof, microgrid_pmax, cost_autonomy_tradeoff, team_scores,
                               best_teams_per_region, podium_france_file,
                               teams_france_classif, type_of_score, scores_traj)
-    
+

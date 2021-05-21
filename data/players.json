@@ -1,39 +1,94 @@
 {
-    "team_PIR": {
-            "url": "https://github.com/PaulinJak/PIR-microgrid"
-        },
-    "team_1": [
-        {
-            "url": "",
-            "folder": "industrial_consumer_1",
-            "type": "industrial_consumer"
-        },
-        {
-            "url": "",
-            "folder": "solar_farm_1",
-            "type": "solar_farm"
-        },
-        {
-            "url": "",
-            "folder": "charging_station_1",
-            "type": "charging_station"
-        }
-    ],
-    "team_0": [
-        {
-            "url": "",
-            "folder": "industrial_consumer_1",
-            "type": "industrial_consumer"
-        },
-        {
-            "url": "",
-            "folder": "solar_farm_1",
-            "type": "solar_farm"
-        },
-        {
-            "url": "",
-            "folder": "charging_station_1",
-            "type": "charging_station"
-        }
-    ]
+  "team_PIR": {
+    "url": "https://github.com/PaulinJak/PIR-microgrid"
+  },
+  "Fumer_tue": [
+    {
+      "url": "https://github.com/etiennegeorges/microgrid-player",
+      "folder": "industrial_consumer",
+      "type": "industrial_consumer"
+    },
+    {
+      "url": "https://github.com/gabriellebzn/microgrid-player",
+      "folder": "solar_farm",
+      "type": "solar_farm"
+    },
+    {
+      "url": "https://github.com/NikitaPomies/microgrid-player",
+      "folder": "data_center",
+      "type": "data_center"
+    },
+    {
+      "url": "https://github.com/XavierChe/microgrid-player-1",
+      "folder": "charging_station",
+      "type": "charging_station"
+    }
+  ],
+  "Jeanneen": [
+    {
+      "url": "https://github.com/Alexandre-Wan/microgrid-player",
+      "folder": "industrial_consumer",
+      "type": "industrial_consumer"
+    },
+    {
+      "url": "https://github.com/evenmatencio/microgrid-player.git",
+      "folder": "solar_farm",
+      "type": "solar_farm"
+    },
+    {
+      "url": "https://github.com/Lau-reen/microgrid-player",
+      "folder": "data_center",
+      "type": "data_center"
+    },
+    {
+      "url": "https://github.com/mathildebouilloux/microgrid-player",
+      "folder": "charging_station",
+      "type": "charging_station"
+    }
+  ],
+  "Le ranch": [
+    {
+      "url": "https://github.com/Guillaume-CASANOVA-F/microgrid-player",
+      "folder": "industrial_consumer",
+      "type": "industrial_consumer"
+    },
+    {
+      "url": "https://github.com/Jeremie-Lecoutre/microgrid-player.git",
+      "folder": "data_center",
+      "type": "data_center"
+    },
+    {
+      "url": "https://github.com/MarieRx/microgrid-player",
+      "folder": "charging_station",
+      "type": "charging_station"
+    },
+    {
+      "url": "https://github.com/Quelqundebien/microgrid-player",
+      "folder": "solar_farm",
+      "type": "solar_farm"
+    }
+  ],
+  "Majola": [
+    {
+      "url": "https://github.com/ClementBf/microgrid-player",
+      "folder": "data_center",
+      "type": "data_center"
+    },
+    {
+      "url": "https://github.com/holly-healey/microgrid-player",
+      "folder": "charging_station",
+      "type": "charging_station"
+    },
+    {
+      "url": "https://github.com/JustinLouazel/MicroGrid",
+      "folder": "solar_farm",
+      "type": "solar_farm"
+    },
+    {
+      "url": "https://github.com/majidarth/microgrid-player.git",
+      "folder": "industrial_consumer",
+      "type": "industrial_consumer"
+    }
+  ]
 }
+

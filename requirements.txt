@@ -5,3 +5,5 @@ tqdm
 matplotlib
 pulp
 python-pptx
+gurobipy
+scipy

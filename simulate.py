@@ -6,6 +6,7 @@ import os
 from collections import defaultdict
 import pandas
 import tqdm
+import sys
 
 
 class Manager:
@@ -39,7 +40,7 @@ class Manager:
             raise ValueError(f'team {team_name} is not found')
 
         if isinstance(team, dict):
-            for player_type in ['solar_farm', 'industrial_consumer']: #['charging_station', 'data_center', 'industrial_consumer', 'solar_farm']:
+            for player_type in ['charging_station', 'data_center', 'industrial_consumer', 'solar_farm']:
                 player = {}
                 player['team'] = team_name
                 player['type'] = player_type
@@ -86,7 +87,7 @@ class Manager:
                         car_name="car_"+str(car)
                         car_dep_arr=[car_data["time_slot_dep"][10*day+car]*2,car_data["time_slot_arr"][10*day+car]*2]
                         day_data[car_name]=car_dep_arr
-                    charging_station[day_name]=day_data
+                    charging_station[day_name]=list(day_data.values())
                 scenario[player_type]=charging_station
 
                 #================================================================================================================================================================
@@ -222,7 +223,11 @@ class Manager:
         for player in self.players:
             # TODO: a remplacer
             if player.__manager__data['type'] in scenario:
-                player.set_scenario(scenario[player.__manager__data['type']])
+                try:
+                    player.set_scenario(scenario[player.__manager__data['type']])
+                except AttributeError as e:
+                    print(f'player {player.__manager__data["type"]} does not implement set_scenario')
+                    raise e
             pass
 
     def play(self, scenario, region):
@@ -270,13 +275,19 @@ class Manager:
     def simulate(self, nb_simulation, simulation_name):
         # for each simulation
         scenario = self.draw_random_scenario(self.regions[0])
-        for region in self.regions:
+        original = sys.stdout
+        null = open('/dev/null', 'w')
+        pv_profiles = {}
+        for region in tqdm.tqdm(self.regions):
+            sys.stdout = null
             scenario = self.switch_region(scenario, region)
+            pv_profiles[region] = np.array(scenario['solar_farm'])*100/1000.0
             self.play(scenario, region)
+            sys.stdout = original
 
         self.reset()
 
-        self.data_viz(self.__results)
+        return self.data_viz(self.__results), pv_profiles
 
     def data_viz(self, results):
         data = {}
@@ -294,6 +305,4 @@ class Manager:
             ptr = ptr[self.team_name]
             for iteration, data_iter in region_data.items():
                 ptr[iteration] = data_iter['player_loads']
-        print(data)
-        from visualize_v2 import generate_pptx
-        generate_pptx(data)
+        return data

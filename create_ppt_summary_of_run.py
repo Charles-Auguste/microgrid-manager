@@ -31,10 +31,11 @@ from plot import plot_mg_load_during_coord_method, plot_all_teams_mg_load_last_i
 def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
                               idx_run: int, optim_period: pd.date_range,
                               coord_method: str, regions_map_file: str,
-                              load_profiles: dict, microgrid_prof: dict,
+                              pv_prof: dict, load_profiles: dict,
+                              microgrid_prof: dict, microgrid_pmax: dict,
                               cost_autonomy_tradeoff: dict, team_scores: dict,
                               best_teams_per_region: dict, podium_france_file: str,
-                              teams_france_classif: dict, type_of_score: str,
+                              teams_france_classif: dict, type_of_score: str, 
                               scores_traj: dict):
     """ 
     Create a powerpoint to summarize the results of a given run of the microgrid 
@@ -46,6 +47,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
     :param optim_period: optim. discrete-time period
     :param coord_method: name of the coordination method used in the microgrid
     :param regions_map_file: full path to the (French) regions map file
+    :param pv_prof: PV prod. profile
     :param load_profiles: dictionary with keys 1. Industrial Cons. scenario; 
     2. Data Center scenario; 3. PV scenario; 4. EV scenario; 5. microgrid team name; 
     6. Iteration; 7. actor type (N.B. charging_station_1, charging_station_2... 
@@ -54,6 +56,9 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
     :param microgrid_prof: dict. with keys 1. Industrial Cons. scenario; 
     2. Data Center scenario; 3. PV scenario; 4. EV scenario; 5. microgrid team name; 
     6. Iteration and value the associated aggreg. microgrid load profile
+    :param microgrid_pmax: dict. with keys 1. Industrial Cons. scenario; 
+    2. Data Center scenario; 3. PV scenario; 4. EV scenario; 5. microgrid team name; 
+    6. Iteration and value the associated microgrid pmax
     :param cost_autonomy_tradeoff: dict. with keys 1. the team names; 2. PV region
     names and values the associated (cost, autonomy score) aggreg. over the set 
     of other scenarios
@@ -114,7 +119,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
         print("Different teams does not have the same region names... -> STOP")
         sys.exit(1)
     else:
-        regions = regions[0]
+        regions=regions[0]
 
     # set region for coord dyn plot if not provided in parameter
     if region_coord_dyn_plot == None:
@@ -129,7 +134,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
         team = team_names[i_team]
         slide, shapes, title_shape = \
             init_img_plus_title_slide(prs, img_slide_layout_idx, 
-                                      "Team %s load during %s \n (PV) region: %s" \
+                                      "Team %s load DURING %s \n (PV) region: %s" \
                                       % (team, coord_method, region_coord_dyn_plot),
                                       font_name, font_size, font_bold, font_italic,
                                       text_vertical_align)
@@ -164,7 +169,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
         team = team_names[i_team]
         slide, shapes, title_shape = \
             init_img_plus_title_slide(prs, img_slide_layout_idx, 
-                                      "Team %s ACTORS' load during %s \n (PV) region: %s" \
+                                      "Team %s ACTORS' load AT THE END of %s \n (PV) region: %s" \
                                       % (team, coord_method, region_coord_dyn_plot),
                                       font_name, font_size, font_bold, font_italic,
                                       text_vertical_align)
@@ -174,7 +179,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
                                                 "per_actor_load_last_iter_team_%s_%s.%s" \
                                                 % (team, date_of_run.strftime("%Y-%m-%d_%H%M"),
                                                    img_format))
-        plot_per_actor_load_last_iter(load_profiles, region_coord_dyn_plot,
+        plot_per_actor_load_last_iter(load_profiles, pv_prof[region_coord_dyn_plot], region_coord_dyn_plot,
                                       team, per_actor_load_file.split(".")[0],
                                       optim_period)
         # open as Pillow Image
@@ -197,7 +202,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
     # TODO add possibility to plot best iter    
     slide, shapes, title_shape = \
         init_img_plus_title_slide(prs, img_slide_layout_idx, 
-                                  "All teams load during %s \n (PV) region: %s" \
+                                  "All teams load AT THE END of %s \n (PV) region: %s" \
                                   % (coord_method, region_coord_dyn_plot),
                                   font_name, font_size, font_bold, font_italic,
                                   text_vertical_align)
@@ -206,7 +211,8 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
     all_teams_mg_load_file = os.path.join(result_dir, "all_teams_mg_load_last_iter_%s.%s" \
                                            % (date_of_run.strftime("%Y-%m-%d_%H%M"),
                                               img_format))
-    plot_all_teams_mg_load_last_iter(microgrid_prof, region_coord_dyn_plot,
+    plot_all_teams_mg_load_last_iter(microgrid_prof, microgrid_pmax, pv_prof[region_coord_dyn_plot],
+                                     region_coord_dyn_plot,
                                      all_teams_mg_load_file.split(".")[0],
                                      optim_period)
     
@@ -260,7 +266,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
     # GLOBAL results 
     # 1) best team per region
     # create image
-    regions_map_img = create_best_team_per_region_img(date_of_run, regions_map_file,
+    regions_map_img = create_best_team_per_region_img(result_dir, date_of_run, regions_map_file,
                                                       best_teams_per_region)
     
     # init. slide with title
@@ -341,7 +347,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
 
     # 3) best team France
     # create image
-    podium_france_img = create_podium_of_france_img(date_of_run, podium_france_file,
+    podium_france_img = create_podium_of_france_img(result_dir, date_of_run, podium_france_file,
                                                     teams_france_classif, type_of_score)
     # init. slide with title
     slide, shapes, title_shape = \
@@ -367,7 +373,7 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
     # improvement slide based on multiple aggreg_results.csv files
     # first check if there is more than one run available
     n_run_dates = len(scores_traj[list(scores_traj)[0]])
-    if n_run_dates == 0:
+    if n_run_dates <= 1:
         print("No slide for score improvement, because unique run available for now")
     else:
         slide, shapes, title_shape = \
@@ -399,11 +405,124 @@ def create_summary_of_run_ppt(result_dir: str, date_of_run: datetime.datetime,
         sp = shapes[1].element
         sp.getparent().remove(sp)
     
+
+    slide = prs.slides.add_slide(title_slide_layout)
+    title = slide.shapes.title
+    subtitle = slide.placeholders[1]
+    title.text = "Annexes"
+    subtitle.text = "results for every region"
+
+    for region_coord_dyn_plot in regions:
+
+        # TODO 2021-5-17 exclude teams with bug
+        # slide to list these teams
+
+        # 1) 1 slide per team with per iteration total microgrid load
+        for i_team in range(n_teams):
+            team = team_names[i_team]
+            slide, shapes, title_shape = \
+                init_img_plus_title_slide(prs, img_slide_layout_idx,
+                                          "Team %s load DURING %s \n (PV) region: %s" \
+                                          % (team, coord_method, region_coord_dyn_plot),
+                                          font_name, font_size, font_bold, font_italic,
+                                          text_vertical_align)
+
+            # plot and save
+            current_dyn_mg_load_file = os.path.join(result_dir,
+                                                    "mg_load_during_dyn_team_%s_%s.%s" \
+                                                    % (team, date_of_run.strftime("%Y-%m-%d_%H%M"),
+                                                       img_format))
+            plot_mg_load_during_coord_method(microgrid_prof, region_coord_dyn_plot,
+                                             team, current_dyn_mg_load_file.split(".")[0],
+                                             optim_period)
+
+            # open as Pillow Image
+            dyn_mg_load_img = Image.open(current_dyn_mg_load_file)
+
+            # add image
+            add_img_to_slide(slide, dyn_mg_load_img, current_dyn_mg_load_file,
+                             ((1 - 2 * left_empty_space / 100) * prs.slide_width,
+                              (1 - 2 * bottom_empty_space / 100) * prs.slide_height \
+                              - title_shape.height),
+                             title_shape.height, left_empty_space / 100 * prs.slide_width,
+                             bottom_empty_space / 100 * prs.slide_height)
+
+            # suppress unused text placeholder (of index 1, 0 is used for the title)
+            sp = shapes[1].element
+            sp.getparent().remove(sp)
+
+        # 1) 1 slide per team with last iteration per-actor load
+        # TODO add possibility to plot best iter
+        for i_team in range(n_teams):
+            team = team_names[i_team]
+            slide, shapes, title_shape = \
+                init_img_plus_title_slide(prs, img_slide_layout_idx,
+                                          "Team %s ACTORS' load AT THE END of %s \n (PV) region: %s" \
+                                          % (team, coord_method, region_coord_dyn_plot),
+                                          font_name, font_size, font_bold, font_italic,
+                                          text_vertical_align)
+
+            # plot and save
+            per_actor_load_file = os.path.join(result_dir,
+                                               "per_actor_load_last_iter_team_%s_%s.%s" \
+                                               % (team, date_of_run.strftime("%Y-%m-%d_%H%M"),
+                                                  img_format))
+            plot_per_actor_load_last_iter(load_profiles, pv_prof[region_coord_dyn_plot], region_coord_dyn_plot,
+                                          team, per_actor_load_file.split(".")[0],
+                                          optim_period)
+            # open as Pillow Image
+            per_actor_load_img = Image.open(per_actor_load_file)
+
+            # add image
+            add_img_to_slide(slide, per_actor_load_img, per_actor_load_file,
+                             ((1 - 2 * left_empty_space / 100) * prs.slide_width,
+                              (1 - 2 * bottom_empty_space / 100) * prs.slide_height \
+                              - title_shape.height),
+                             title_shape.height, left_empty_space / 100 * prs.slide_width,
+                             bottom_empty_space / 100 * prs.slide_height)
+
+            # suppress unused text placeholder (of index 1, 0 is used for the title)
+            sp = shapes[1].element
+            sp.getparent().remove(sp)
+
+        # 1 slide with all teams microgrid load at the last iteration
+        # TODO add possibility to plot best iter
+        slide, shapes, title_shape = \
+            init_img_plus_title_slide(prs, img_slide_layout_idx,
+                                      "All teams load AT THE END of %s \n (PV) region: %s" \
+                                      % (coord_method, region_coord_dyn_plot),
+                                      font_name, font_size, font_bold, font_italic,
+                                      text_vertical_align)
+
+        # plot and save
+        all_teams_mg_load_file = os.path.join(result_dir, "all_teams_mg_load_last_iter_%s.%s" \
+                                              % (date_of_run.strftime("%Y-%m-%d_%H%M"),
+                                                 img_format))
+        plot_all_teams_mg_load_last_iter(microgrid_prof, microgrid_pmax, pv_prof[region_coord_dyn_plot],
+                                         region_coord_dyn_plot,
+                                         all_teams_mg_load_file.split(".")[0],
+                                         optim_period)
+
+        # open as Pillow Image
+        all_teams_mg_load_img = Image.open(all_teams_mg_load_file)
+
+        # add image
+        add_img_to_slide(slide, all_teams_mg_load_img, all_teams_mg_load_file,
+                         ((1 - 2 * left_empty_space / 100) * prs.slide_width,
+                          (1 - 2 * bottom_empty_space / 100) * prs.slide_height \
+                          - title_shape.height),
+                         title_shape.height, left_empty_space / 100 * prs.slide_width,
+                         bottom_empty_space / 100 * prs.slide_height)
+
+        # suppress unused text placeholder (of index 1, 0 is used for the title)
+        sp = shapes[1].element
+        sp.getparent().remove(sp)
+
     # save the pptx JDP presentation
     prs.save(os.path.join(result_dir, "run_summary_%s.pptx" \
                                           % date_of_run.strftime("%Y-%m-%d_%H%M")))
 
-def create_best_team_per_region_img(date_of_run: datetime.datetime, regions_map_file: str,
+def create_best_team_per_region_img(result_dir, date_of_run: datetime.datetime, regions_map_file: str,
                                     best_teams_per_region: dict) -> Image:
     """
     Create image giving the best team for each of the regions
@@ -488,7 +607,7 @@ def create_best_team_per_region_img(date_of_run: datetime.datetime, regions_map_
     
     return regions_map_img
 
-def create_podium_of_france_img(date_of_run: datetime.datetime, 
+def create_podium_of_france_img(result_dir, date_of_run: datetime.datetime,
                                 podium_france_file: str, teams_france_classif: dict,
                                 type_of_score: str) -> Image:
     """
@@ -538,8 +657,8 @@ def create_podium_of_france_img(date_of_run: datetime.datetime,
     # add team names on the podium    
     for ranking in [1,2,3]:
         # Join text if multiple teams with same score
-        given_ranking_teams_txt = "%s: %s" % ("/".join(teams_france_classif[ranking][0]),
-                                              str(teams_france_classif[ranking][1]))
+        given_ranking_teams_txt = "%.2f: %s" % (teams_france_classif[ranking][0],
+                                                teams_france_classif[ranking][1])
         # get text width and height
         current_font = ImageFont.truetype("%s%s.ttf" % (font_style["name"].lower(),
                                           "b" if font_style["bold"] else "i" \
@@ -928,7 +1047,7 @@ if __name__ =="__main__":
                                            sale_price, delta_t_s)
 
     # and microgrid collective metrics
-    microgrid_prof, collective_metrics = \
+    microgrid_prof, microgrid_pmax, collective_metrics = \
             calc_microgrid_collective_metrics(load_profiles, contracted_p_tariffs, 
                                               delta_t_s)
 
@@ -959,9 +1078,11 @@ if __name__ =="__main__":
     scores_traj = get_improvement_traj(current_dir, list_of_run_dates,
                                        list(team_scores))
 
+    pv_prof = 5*np.random.rand(n_ts)
+
     create_summary_of_run_ppt(result_dir, date_of_run, idx_run, optim_period,
-                              coord_method, regions_map_file, load_profiles,
-                              microgrid_prof, cost_autonomy_tradeoff, team_scores,
-                              best_teams_per_region, podium_france_file,
+                              coord_method, regions_map_file, pv_prof, load_profiles,
+                              microgrid_prof, microgrid_pmax, cost_autonomy_tradeoff,
+                              team_scores, best_teams_per_region, podium_france_file,
                               teams_france_classif, type_of_score, scores_traj)
     

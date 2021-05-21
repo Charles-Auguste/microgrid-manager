@@ -226,7 +226,8 @@ def plot_mg_load_during_coord_method(microgrid_prof: dict, region_plot: str,
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
                         full_date_plot, False, True, 4)
 
-def plot_all_teams_mg_load_last_iter(microgrid_prof: dict, region_plot: str,
+def plot_all_teams_mg_load_last_iter(microgrid_prof: dict, microgrid_pmax: dict, 
+                                     pv_prof: np.ndarray, region_plot: str, 
                                      filename: str, full_date_plot: pd.date_range):
 
     """
@@ -235,6 +236,10 @@ def plot_all_teams_mg_load_last_iter(microgrid_prof: dict, region_plot: str,
     :param microgrid_prof: dict. with keys 1. Industrial Cons. scenario; 
     2. Data Center scenario; 3. PV scenario; 4. EV scenario; 5. microgrid team name; 
     6. Iteration and value the associated aggreg. microgrid load profile
+    :param microgrid_pmax: dict. with keys 1. Industrial Cons. scenario; 
+    2. Data Center scenario; 3. PV scenario; 4. EV scenario; 5. microgrid team name; 
+    6. Iteration and value the associated microgrid pmax
+    :param pv_prof: vector of PV prod. profile 
     :param region_plot: name of the region to be plotted
     :param filename: full path to the image to be saved
     :param full_date_plot: range of dates corresponding to the optim. period
@@ -255,18 +260,28 @@ def plot_all_teams_mg_load_last_iter(microgrid_prof: dict, region_plot: str,
             common_x = np.arange(len(microgrid_prof[first_ic_scen][first_dc_scen] \
                                      [region_plot][first_ev_scen][team][iterations[0]]))
 
+            tuples_plot = [(common_x, pv_prof, "yellow", "-", "", "PV prod.")]
+
         # (vector of x-values to be plotted, y-values to be plotted, color, linestyle,
         # marker, label)
+        # add load profile
         tuples_plot.append((common_x, microgrid_prof[first_ic_scen][first_dc_scen] \
                                 [region_plot][first_ev_scen][team][iterations[-1]],
                             team_colors[team_names.index(team)%n_colors], "-",
                             team_markers[team_names.index(team)%n_markers], 
-                            "%s (iter=%i)" % (team, iterations[-1])))
+                            "%s: load prof. (iter=%i)" % (team, iterations[-1])))
+        # and associated suscribed pmax
+        tuples_plot.append((common_x, microgrid_pmax[first_ic_scen][first_dc_scen] \
+                                [region_plot][first_ev_scen][team][iterations[-1]] \
+                                * np.ones(len(common_x)),
+                            team_colors[team_names.index(team)%n_colors], "--",
+                            "", "%s: contract. pmax" % team))
     
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
                         full_date_plot, False, True, 4)
 
-def plot_per_actor_load_last_iter(load_profiles: dict, region_plot: str, team_plot: str,
+def plot_per_actor_load_last_iter(load_profiles: dict, pv_prof: np.ndarray, 
+                                  region_plot: str, team_plot: str,
                                   filename: str, full_date_plot: pd.date_range):
     """
     Plot per-actor at the last iteration of coord. dyn in a given team (microgrid)
@@ -276,6 +291,7 @@ def plot_per_actor_load_last_iter(load_profiles: dict, region_plot: str, team_pl
     6. Iteration; 7. actor type (N.B. charging_station_1, charging_station_2... 
     if multiple charging stations in this microgrid) and values the associated
     load profile (kW)
+    :param pv_prof: vector of PV prod. profile 
     :param region_plot: name of the region to be plotted
     :param team_plot: team for which plot is done
     :param filename: full path to the image to be saved
@@ -296,9 +312,10 @@ def plot_per_actor_load_last_iter(load_profiles: dict, region_plot: str, team_pl
     # plot using generic function
     # (vector of x-values to be plotted, y-values to be plotted, color, linestyle,
     # marker, label)
-    tuples_plot = [(common_x, load_profiles[first_ic_scen][first_dc_scen][region_plot] \
+    tuples_plot = [(common_x, pv_prof, "yellow", "-", "", "PV prod.")]
+    tuples_plot.extend([(common_x, load_profiles[first_ic_scen][first_dc_scen][region_plot] \
                       [first_ev_scen][team_plot][iterations[-1]][actor],
-                    actor_colors[actor], "-", "", actor) for actor in actors]
+                    actor_colors[actor], "-", "", actor) for actor in actors])
     
     plot_list_of_tuples(tuples_plot, "Date", "Power (kW)", 1, True, filename,
                         full_date_plot, False, True, 4)
