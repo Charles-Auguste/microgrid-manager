@@ -132,7 +132,7 @@ class Manager:
                     nom_scenario="scenario_"+str(i)
                     list_scenario=[]
                     for j in range (48):
-                        list_scenario.append(industrial_data["cons (kW)"][48*i+j])
+                        list_scenario.append(np.array(industrial_data["cons (kW)"][48*i+j])/10.)
                     scenario_industrial[nom_scenario]=list_scenario
                 scenario[player_type]=scenario_industrial
 
