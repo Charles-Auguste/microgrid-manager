@@ -654,8 +654,9 @@ def create_podium_of_france_img(result_dir, date_of_run: datetime.datetime,
     podium_france_img = Image.open(podium_france_file)
     draw_podium_france_img = ImageDraw.Draw(podium_france_img)
 
-    # add team names on the podium    
-    for ranking in [1,2,3]:
+    # add team names on the podium
+    rankings = [r for r in teams_france_classif.keys() if r in [1, 2, 3]]
+    for ranking in rankings:
         # Join text if multiple teams with same score
         given_ranking_teams_txt = "%.2f: %s" % (teams_france_classif[ranking][0],
                                                 teams_france_classif[ranking][1])
